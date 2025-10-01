@@ -1,0 +1,54 @@
+{
+  "courseFiles": {
+    "title": "ملفات المقررات",
+    "description": "إدارة وتنظيم ملفات المقررات الدراسية",
+    "upload": "رفع ملف جديد",
+    "uploadFiles": "رفع ملفات جديدة",
+    "selectFiles": "اختيار الملفات",
+    "selectedFiles": "الملفات المحددة",
+    "search": "البحث في أسماء الملفات والوصف...",
+    "filters": {
+      "course": "المقرر",
+      "category": "التصنيف",
+      "fileType": "نوع الملف",
+      "allCourses": "جميع المقررات",
+      "allCategories": "جميع التصنيفات",
+      "allTypes": "جميع الأنواع"
+    },
+    "categories": {
+      "general": "عام",
+      "lecture": "محاضرات", 
+      "assignment": "واجبات",
+      "exam": "امتحانات",
+      "reference": "مراجع",
+      "lab": "معمل",
+      "project": "مشاريع"
+    },
+    "statistics": {
+      "totalFiles": "إجمالي الملفات",
+      "totalSize": "الحجم الإجمالي",
+      "publicFiles": "الملفات العامة",
+      "privateFiles": "خاص",
+      "recentFiles": "هذا الأسبوع",
+      "mostCommonType": "أكثر الأنواع"
+    },
+    "actions": {
+      "preview": "معاينة",
+      "download": "تحميل",
+      "copyLink": "نسخ الرابط",
+      "delete": "حذف",
+      "refresh": "تحديث"
+    },
+    "messages": {
+      "noFiles": "لا توجد ملفات",
+      "noFilesDescription": "لم يتم رفع أي ملفات بعد",
+      "noMatchingFiles": "لم يتم العثور على ملفات تطابق المعايير المحددة",
+      "uploadSuccess": "تم رفع الملف بنجاح",
+      "uploadError": "فشل في رفع الملف",
+      "deleteSuccess": "تم حذف الملف بنجاح",
+      "deleteError": "فشل في حذف الملف",
+      "deleteConfirm": "هل أنت متأكد من حذف هذا الملف؟",
+      "linkCopied": "تم نسخ رابط الملف"
+    }
+  }
+}

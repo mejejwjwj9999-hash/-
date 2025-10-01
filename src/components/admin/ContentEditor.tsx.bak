@@ -1,0 +1,649 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { EnhancedWysiwygEditor } from './EnhancedWysiwygEditor';
+import { RichTextPreview } from '@/components/ui/rich-text-editor';
+import { DynamicContentWrapper } from '@/components/DynamicContentWrapper';
+import { PreviewStorage } from '@/utils/previewStorage';
+import { usePreview } from '@/contexts/PreviewContext';
+import { 
+  useContentPages, 
+  useContentElements, 
+  useUpdateContentElement,
+  useDeleteContentElement,
+  ContentElement 
+} from '@/hooks/useContentEditor';
+import { useContentRevisions, useRestoreRevision } from '@/hooks/useContentHistory';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { 
+  Save, 
+  Eye, 
+  History, 
+  Plus, 
+  Trash2, 
+  AlertTriangle,
+  Globe,
+  FileText,
+  Image,
+  Link2,
+  MousePointer
+} from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+
+export const ContentEditor: React.FC = () => {
+  const [selectedPageKey, setSelectedPageKey] = useState<string>('');
+  const [selectedElement, setSelectedElement] = useState<ContentElement | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
+  
+  // استخدام نظام المعاينة الجديد
+  const { isPreviewMode, setPreviewMode: setGlobalPreviewMode, updatePreviewContent } = usePreview();
+  
+  // Form state
+  const [elementKey, setElementKey] = useState('');
+  const [elementType, setElementType] = useState<ContentElement['element_type']>('text');
+  const [contentAr, setContentAr] = useState('');
+  const [contentEn, setContentEn] = useState('');
+  const [status, setStatus] = useState<ContentElement['status']>('draft');
+
+  // Hooks
+  const { data: pages } = useContentPages();
+  const selectedPage = pages?.find(p => p.page_key === selectedPageKey);
+  const { data: elements } = useContentElements(selectedPage?.id);
+  const updateElement = useUpdateContentElement();
+  const deleteElement = useDeleteContentElement();
+  const { data: revisions } = useContentRevisions(selectedElement?.id);
+  const restoreRevision = useRestoreRevision();
+
+  // Track changes for unsaved warning
+  const [originalData, setOriginalData] = useState<{
+    contentAr: string;
+    contentEn: string;
+    elementKey: string;
+    elementType: ContentElement['element_type'];
+    status: ContentElement['status'];
+  }>({
+    contentAr: '',
+    contentEn: '',
+    elementKey: '',
+    elementType: 'text',
+    status: 'draft'
+  });
+
+  const hasUnsavedChanges = isEditing && (
+    originalData.contentAr !== contentAr ||
+    originalData.contentEn !== contentEn ||
+    originalData.elementKey !== elementKey ||
+    originalData.elementType !== elementType ||
+    originalData.status !== status
+  );
+
+  const { showWarning, confirmNavigation } = useUnsavedChanges(hasUnsavedChanges, {
+    message: 'لديك تغييرات غير محفوظة. هل أنت متأكد من الخروج؟'
+  });
+
+  // تحديث المعاينة عند تغيير المحتوى
+  useEffect(() => {
+    if (selectedPageKey && elementKey && (contentAr || contentEn)) {
+      updatePreviewContent({
+        pageKey: selectedPageKey,
+        elementKey,
+        contentAr,
+        contentEn,
+        elementType
+      });
+    }
+  }, [selectedPageKey, elementKey, contentAr, contentEn, elementType, updatePreviewContent]);
+
+  // تفعيل وضع المعاينة عند الضرورة
+  const handlePreviewModeToggle = () => {
+    const newPreviewMode = !previewMode;
+    setPreviewMode(newPreviewMode);
+    setGlobalPreviewMode(newPreviewMode);
+  };
+    if (selectedElement) {
+      setElementKey(selectedElement.element_key);
+      setElementType(selectedElement.element_type);
+      setContentAr(selectedElement.content_ar || '');
+      setContentEn(selectedElement.content_en || '');
+      setStatus(selectedElement.status);
+      
+      setOriginalData({
+        contentAr: selectedElement.content_ar || '',
+        contentEn: selectedElement.content_en || '',
+        elementKey: selectedElement.element_key,
+        elementType: selectedElement.element_type,
+        status: selectedElement.status
+      });
+    }
+  }, [selectedElement]);
+
+  // Clear form when switching pages
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      confirmNavigation(() => {
+        resetForm();
+      });
+    } else {
+      resetForm();
+    }
+  }, [selectedPageKey]);
+
+  const resetForm = () => {
+    setSelectedElement(null);
+    setIsEditing(false);
+    setElementKey('');
+    setElementType('text');
+    setContentAr('');
+    setContentEn('');
+    setStatus('draft');
+    setOriginalData({
+      contentAr: '',
+      contentEn: '',
+      elementKey: '',
+      elementType: 'text',
+      status: 'draft'
+    });
+  };
+
+  const handleSave = async () => {
+    if (!selectedPageKey || !elementKey) {
+      toast({
+        title: 'بيانات ناقصة',
+        description: 'يرجى اختيار الصفحة وتحديد مفتاح العنصر',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      await updateElement.mutateAsync({
+        pageKey: selectedPageKey,
+        elementKey,
+        elementType,
+        contentAr: contentAr || undefined,
+        contentEn: contentEn || undefined,
+        status
+      });
+
+      setOriginalData({
+        contentAr,
+        contentEn,
+        elementKey,
+        elementType,
+        status
+      });
+    } catch (error) {
+      console.error('Error saving element:', error);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedElement) return;
+    
+    const confirmed = window.confirm('هل أنت متأكد من حذف هذا العنصر؟');
+    if (!confirmed) return;
+
+    try {
+      await deleteElement.mutateAsync(selectedElement.id);
+      resetForm();
+    } catch (error) {
+      console.error('Error deleting element:', error);
+    }
+  };
+
+  const getElementTypeIcon = (type: ContentElement['element_type']) => {
+    switch (type) {
+      case 'text': return <FileText className="h-4 w-4" />;
+      case 'rich_text': return <FileText className="h-4 w-4" />;
+      case 'image': return <Image className="h-4 w-4" />;
+      case 'link': return <Link2 className="h-4 w-4" />;
+      case 'button': return <MousePointer className="h-4 w-4" />;
+      default: return <FileText className="h-4 w-4" />;
+    }
+  };
+
+  const getStatusColor = (status: ContentElement['status']) => {
+    switch (status) {
+      case 'published': return 'bg-green-500';
+      case 'draft': return 'bg-yellow-500';
+      case 'archived': return 'bg-gray-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6">
+      {showWarning && (
+        <div className="mb-4 p-4 bg-yellow-50 border-r-4 border-yellow-400 rounded">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 ml-2" />
+            <p className="text-yellow-800">لديك تغييرات غير محفوظة</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar - Pages List */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-right">الصفحات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-96">
+                <div className="space-y-2">
+                  {pages?.map((page) => (
+                    <Button
+                      key={page.id}
+                      variant={selectedPageKey === page.page_key ? "default" : "outline"}
+                      className="w-full justify-start text-right"
+                      onClick={() => {
+                        if (hasUnsavedChanges) {
+                          confirmNavigation(() => setSelectedPageKey(page.page_key));
+                        } else {
+                          setSelectedPageKey(page.page_key);
+                        }
+                      }}
+                    >
+                      <Globe className="h-4 w-4 ml-2" />
+                      {page.page_name_ar}
+                    </Button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Elements List */}
+          {selectedPage && (
+            <Card className="mt-4">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-right">العناصر</CardTitle>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (hasUnsavedChanges) {
+                        confirmNavigation(() => setIsEditing(true));
+                      } else {
+                        setIsEditing(true);
+                        resetForm();
+                      }
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-64">
+                  <div className="space-y-2">
+                    {elements?.map((element) => (
+                      <div
+                        key={element.id}
+                        className={`p-3 border rounded cursor-pointer transition-colors ${
+                          selectedElement?.id === element.id
+                            ? 'border-primary bg-primary/10'
+                            : 'hover:bg-muted'
+                        }`}
+                        onClick={() => {
+                          if (hasUnsavedChanges) {
+                            confirmNavigation(() => {
+                              setSelectedElement(element);
+                              setIsEditing(true);
+                            });
+                          } else {
+                            setSelectedElement(element);
+                            setIsEditing(true);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            {getElementTypeIcon(element.element_type)}
+                            <span className="text-sm font-medium">{element.element_key}</span>
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={`${getStatusColor(element.status)} text-white`}
+                          >
+                            {element.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {element.content_ar || element.content_en || 'بدون محتوى'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Main Content - Editor */}
+        <div className="lg:col-span-3">
+          {!selectedPage ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">اختر صفحة للبدء</h3>
+                <p className="text-muted-foreground">اختر صفحة من القائمة الجانبية لبدء تحرير المحتوى</p>
+              </CardContent>
+            </Card>
+          ) : !isEditing ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">اختر عنصر للتحرير</h3>
+                <p className="text-muted-foreground">اختر عنصر من القائمة أو أنشئ عنصر جديد</p>
+                <Button className="mt-4" onClick={() => setIsEditing(true)}>
+                  <Plus className="h-4 w-4 ml-2" />
+                  إنشاء عنصر جديد
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-right">
+                    تحرير المحتوى - {selectedPage.page_name_ar}
+                  </CardTitle>
+                  <div className="flex items-center space-x-2">
+                    {selectedElement && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <History className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>تاريخ المراجعات</DialogTitle>
+                          </DialogHeader>
+                          <ScrollArea className="h-96">
+                            <div className="space-y-3">
+                              {revisions?.map((revision) => (
+                                <div key={revision.id} className="border rounded p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium">
+                                      المراجعة #{revision.revision_number}
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        restoreRevision.mutate({
+                                          elementId: selectedElement.id,
+                                          revisionId: revision.id
+                                        });
+                                      }}
+                                    >
+                                      استعادة
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mb-2">
+                                    {new Date(revision.created_at).toLocaleString('ar')}
+                                  </p>
+                                  <p className="text-sm line-clamp-3">
+                                    {revision.content_ar || revision.content_en || 'بدون محتوى'}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewModeToggle()}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Element Configuration */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="element-key">مفتاح العنصر</Label>
+                    <Input
+                      id="element-key"
+                      value={elementKey}
+                      onChange={(e) => setElementKey(e.target.value)}
+                      placeholder="title, description, button_text..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="element-type">نوع العنصر</Label>
+                    <Select value={elementType} onValueChange={(value: ContentElement['element_type']) => setElementType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">نص بسيط</SelectItem>
+                        <SelectItem value="rich_text">نص منسق</SelectItem>
+                        <SelectItem value="image">صورة</SelectItem>
+                        <SelectItem value="link">رابط</SelectItem>
+                        <SelectItem value="button">زر</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="status">الحالة</Label>
+                    <Select value={status} onValueChange={(value: ContentElement['status']) => setStatus(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">مسودة</SelectItem>
+                        <SelectItem value="published">منشور</SelectItem>
+                        <SelectItem value="archived">مؤرشف</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Content Editor/Preview */}
+                {previewMode ? (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">معاينة المحتوى المباشرة</h3>
+                    
+                    {selectedPageKey && elementKey ? (
+                      <Tabs value={language} onValueChange={(value: 'ar' | 'en') => setLanguage(value)}>
+                        <TabsList>
+                          <TabsTrigger value="ar">عربي</TabsTrigger>
+                          <TabsTrigger value="en">English</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="ar" className="mt-4">
+                          <div className="border rounded p-4 min-h-48 bg-background">
+                            <DynamicContentWrapper
+                              pageKey={selectedPageKey}
+                              elementKey={elementKey}
+                              language="ar"
+                              className="prose prose-sm max-w-none"
+                              fallback={<p className="text-muted-foreground">بدون محتوى</p>}
+                            />
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="en" className="mt-4">
+                          <div className="border rounded p-4 min-h-48 bg-background">
+                            <DynamicContentWrapper
+                              pageKey={selectedPageKey}
+                              elementKey={elementKey}
+                              language="en"
+                              className="prose prose-sm max-w-none"
+                              fallback={<p className="text-muted-foreground">No content</p>}
+                            />
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    ) : (
+                      <div className="border rounded p-4 min-h-48 bg-muted flex items-center justify-center">
+                        <p className="text-muted-foreground">اختر صفحة وعنصر لعرض المعاينة</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Tabs value={language} onValueChange={(value: 'ar' | 'en') => setLanguage(value)}>
+                      <TabsList>
+                        <TabsTrigger value="ar">عربي</TabsTrigger>
+                        <TabsTrigger value="en">English</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="ar" className="mt-4">
+                        {elementType === 'rich_text' ? (
+                          <EnhancedWysiwygEditor
+                            value={contentAr}
+                            onChange={setContentAr}
+                            placeholder="اكتب المحتوى بالعربية..."
+                            language="ar"
+                            elementId={selectedElement?.id}
+                            pageKey={selectedPageKey}
+                            elementKey={elementKey}
+                            enableAI={true}
+                            enableVersionHistory={true}
+                            enableImageEditing={true}
+                            showAdvancedFeatures={true}
+                            autoSave={true}
+                            onAutoSave={async (content, metadata) => {
+                              setContentAr(content);
+                              // Auto-save functionality
+                              if (selectedPageKey && elementKey) {
+                                try {
+                                  await updateElement.mutateAsync({
+                                    pageKey: selectedPageKey,
+                                    elementKey,
+                                    elementType,
+                                    contentAr: content,
+                                    contentEn,
+                                    status,
+                                    metadata
+                                  });
+                                } catch (error) {
+                                  console.error('Auto-save failed:', error);
+                                }
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div>
+                            <Label htmlFor="content-ar">المحتوى بالعربية</Label>
+                            <Input
+                              id="content-ar"
+                              value={contentAr}
+                              onChange={(e) => setContentAr(e.target.value)}
+                              placeholder="اكتب المحتوى..."
+                            />
+                          </div>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="en" className="mt-4">
+                        {elementType === 'rich_text' ? (
+                          <EnhancedWysiwygEditor
+                            value={contentEn}
+                            onChange={setContentEn}
+                            placeholder="Write content in English..."
+                            language="en"
+                            elementId={selectedElement?.id}
+                            pageKey={selectedPageKey}
+                            elementKey={elementKey}
+                            enableAI={true}
+                            enableVersionHistory={true}
+                            enableImageEditing={true}
+                            showAdvancedFeatures={true}
+                            autoSave={true}
+                            onAutoSave={async (content, metadata) => {
+                              setContentEn(content);
+                              // Auto-save functionality
+                              if (selectedPageKey && elementKey) {
+                                try {
+                                  await updateElement.mutateAsync({
+                                    pageKey: selectedPageKey,
+                                    elementKey,
+                                    elementType,
+                                    contentAr,
+                                    contentEn: content,
+                                    status,
+                                    metadata
+                                  });
+                                } catch (error) {
+                                  console.error('Auto-save failed:', error);
+                                }
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div>
+                            <Label htmlFor="content-en">Content in English</Label>
+                            <Input
+                              id="content-en"
+                              value={contentEn}
+                              onChange={(e) => setContentEn(e.target.value)}
+                              placeholder="Write content..."
+                            />
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      onClick={handleSave}
+                      disabled={updateElement.isPending || !elementKey}
+                    >
+                      <Save className="h-4 w-4 ml-2" />
+                      {updateElement.isPending ? 'جاري الحفظ...' : 'حفظ'}
+                    </Button>
+                    
+                    {selectedElement && (
+                      <Button
+                        variant="destructive"
+                        onClick={handleDelete}
+                        disabled={deleteElement.isPending}
+                      >
+                        <Trash2 className="h-4 w-4 ml-2" />
+                        حذف
+                      </Button>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (hasUnsavedChanges) {
+                        confirmNavigation(() => resetForm());
+                      } else {
+                        resetForm();
+                      }
+                    }}
+                  >
+                    إلغاء
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

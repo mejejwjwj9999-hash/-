@@ -1,0 +1,19 @@
+# Netlify redirects file
+# https://docs.netlify.com/routing/redirects/
+
+# Redirect all routes to index.html for SPA
+/*    /index.html   200
+
+# Optional: Redirect old paths (if any)
+# /old-path    /new-path    301
+
+# Force HTTPS (optional - adjust domain as needed)
+# http://your-domain.com/*    https://your-domain.com/:splat    301!
+
+# Set headers for static assets
+/assets/*
+  Cache-Control: max-age=31536000
+  
+# Set headers for index.html
+/index.html
+  Cache-Control: no-cache
